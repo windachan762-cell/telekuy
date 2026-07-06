@@ -28,16 +28,17 @@ async function checkForceSub(chatId, userId) {
   // Format username untuk API
   const getSubLink = (val) => {
     if (!val) return null;
-    if (val.startsWith('-100')) return val; // Private ID
-    if (val.startsWith('http') || val.startsWith('t.me/')) {
+    let clean = val.replace(/[<>\[\]\s]/g, ''); // Hapus karakter ilegal
+    if (clean.startsWith('-100')) return clean; // Private ID
+    if (clean.startsWith('http') || clean.startsWith('t.me/')) {
       // Hapus query parameters seperti ?boost=1
-      let clean = val.split('?')[0];
+      let urlParts = clean.split('?')[0];
       // Hapus trailing slash jika ada
-      if (clean.endsWith('/')) clean = clean.slice(0, -1);
-      return '@' + clean.split('/').pop().replace('+', ''); 
+      if (urlParts.endsWith('/')) urlParts = urlParts.slice(0, -1);
+      return '@' + urlParts.split('/').pop().replace('+', ''); 
     }
-    if (!val.startsWith('@')) return '@' + val;
-    return val;
+    if (!clean.startsWith('@')) return '@' + clean;
+    return clean;
   };
 
   const c1 = getSubLink(force1);
@@ -68,9 +69,15 @@ async function checkForceSub(chatId, userId) {
     let inlineBtns = [];
     notJoined.forEach(c => {
       msg += `- ${c}\n`;
-      let link = c.startsWith('http') || c.startsWith('t.me/') ? c : `https://t.me/${c.replace('@', '')}`;
+      let cleanC = c.replace(/[<>\[\]\s]/g, '');
+      let link = cleanC.startsWith('http') || cleanC.startsWith('t.me/') ? cleanC : `https://t.me/${cleanC.replace('@', '')}`;
       if (!link.startsWith('http')) link = 'https://' + link;
-      inlineBtns.push([{ text: `🔗 Gabung ${c}`, url: link }]);
+      
+      try {
+        inlineBtns.push([{ text: `🔗 Gabung`, url: encodeURI(link) }]);
+      } catch (err) {
+        console.error("Invalid URL format generated:", link);
+      }
     });
     
     msg += "\nJika sudah bergabung, klik tombol Cek Status di bawah ini.";

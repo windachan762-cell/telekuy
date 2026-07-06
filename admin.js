@@ -64,10 +64,12 @@ async function handleAdminState(bot, msg, stateObj) {
     });
   }
   if (text === "🔒 Set Wajib Sub") {
-    setState(chatId, 'ADMIN_SUB_WAIT_LINK');
-    return bot.sendMessage(chatId, "Masukkan link atau username channel/grup (Maksimal 2, pisahkan dengan spasi).\n\nContoh: `t.me/grup1 t.me/grup2`", {
+    const cur1 = await db.getSetting('force_sub_1');
+    setState(chatId, 'ADMIN_SUB_1_WAIT');
+    let msg = `*PENGATURAN WAJIB SUBSCRIBE (1/2)*\n\nSaat ini: ${cur1 || 'Belum di-set'}\n\nSilakan ketik Link atau Username untuk Grup 1:`;
+    return bot.sendMessage(chatId, msg, {
       parse_mode: 'Markdown',
-      reply_markup: { keyboard: [[{ text: "🔙 Batal" }]], resize_keyboard: true }
+      reply_markup: { keyboard: [[{ text: "⏭️ Lewati" }, { text: "🗑️ Hapus Sub 1" }], [{ text: "🔙 Batal" }]], resize_keyboard: true }
     });
   }
   if (text === "🔓 Hapus Wajib Sub") {
@@ -130,18 +132,34 @@ async function handleAdminState(bot, msg, stateObj) {
     return sendAdminMenu(bot, chatId);
   }
 
-  if (state === 'ADMIN_SUB_WAIT_LINK') {
-    if (!text) return bot.sendMessage(chatId, "Harus berupa teks.");
-    const args = text.split(/\s+/);
-    if (args.length > 2) return bot.sendMessage(chatId, "Maksimal 2 channel/grup.");
-      
-    await db.setSetting('force_sub_1', args[0]);
-    if (args.length === 2) {
-      await db.setSetting('force_sub_2', args[1]);
-    } else {
-      await db.deleteSetting('force_sub_2');
+  if (state === 'ADMIN_SUB_1_WAIT') {
+    if (text === "🗑️ Hapus Sub 1") {
+      await db.deleteSetting('force_sub_1');
+      bot.sendMessage(chatId, "✅ Sub 1 berhasil dihapus.");
+    } else if (text !== "⏭️ Lewati") {
+      await db.setSetting('force_sub_1', text);
+      bot.sendMessage(chatId, `✅ Sub 1 diset ke: ${text}`);
     }
-    bot.sendMessage(chatId, `✅ Channel wajib subscribe diatur ke:\n1. ${args[0]}\n2. ${args[1] || '(Tidak ada)'}`);
+    
+    const cur2 = await db.getSetting('force_sub_2');
+    setState(chatId, 'ADMIN_SUB_2_WAIT');
+    let msg2 = `*PENGATURAN WAJIB SUBSCRIBE (2/2)*\n\nSaat ini: ${cur2 || 'Belum di-set'}\n\nSilakan ketik Link atau Username untuk Grup 2:`;
+    return bot.sendMessage(chatId, msg2, {
+      parse_mode: 'Markdown',
+      reply_markup: { keyboard: [[{ text: "⏭️ Lewati" }, { text: "🗑️ Hapus Sub 2" }], [{ text: "🔙 Batal" }]], resize_keyboard: true }
+    });
+  }
+
+  if (state === 'ADMIN_SUB_2_WAIT') {
+    if (text === "🗑️ Hapus Sub 2") {
+      await db.deleteSetting('force_sub_2');
+      bot.sendMessage(chatId, "✅ Sub 2 berhasil dihapus.");
+    } else if (text !== "⏭️ Lewati") {
+      await db.setSetting('force_sub_2', text);
+      bot.sendMessage(chatId, `✅ Sub 2 diset ke: ${text}`);
+    }
+    
+    bot.sendMessage(chatId, "✅ Selesai mengatur Wajib Subscribe.");
     clearState(chatId);
     return sendAdminMenu(bot, chatId);
   }
