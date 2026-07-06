@@ -257,9 +257,17 @@ bot.on('message', async (msg) => {
 
   const stateObj = getState(chatId);
 
-  // Jika sedang berada di State Admin
-  if (stateObj.state && stateObj.state.startsWith('ADMIN_')) {
-    return handleAdminState(bot, msg, stateObj);
+  // Jika sedang berada di State Admin ATAU menekan tombol Admin Menu
+  const adminMenus = [
+    "📢 Broadcast", "🎁 Give Koin", "🏢 Kelola Workspace",
+    "📖 Set Tutorial", "🔒 Set Wajib Sub", "🔓 Hapus Wajib Sub",
+    "➕ Tambah WS", "❌ Hapus WS", "👉 Set Aktif WS"
+  ];
+
+  if ((stateObj.state && stateObj.state.startsWith('ADMIN_')) || adminMenus.includes(text)) {
+    if (await isAdmin(userId)) {
+      return handleAdminState(bot, msg, stateObj);
+    }
   }
 
   if (stateObj.state === 'WAITING_FOR_EMAIL') {
