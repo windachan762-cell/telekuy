@@ -72,6 +72,10 @@ async function sendMainMenu(chatId, userId) {
     ]
   };
 
+  if (await isAdmin(userId)) {
+    keyboard.inline_keyboard.push([{ text: "⚙️ Admin Panel", callback_data: "menu_admin" }]);
+  }
+
   bot.sendMessage(chatId, `🤖 *Selamat Datang di Bot Auto-Invite ChatGPT Workspace!*\n\nKoin Anda saat ini: 💰 *${user.coins}*\n\nSilakan pilih menu di bawah ini:`, {
     parse_mode: 'Markdown',
     reply_markup: keyboard
@@ -159,6 +163,20 @@ bot.on('callback_query', async (query) => {
     } else {
       bot.sendMessage(chatId, "Belum ada tutorial yang di-set oleh Admin.");
     }
+
+  } else if (data === "menu_admin") {
+    if (!(await isAdmin(userId))) return bot.sendMessage(chatId, "❌ Akses Ditolak!");
+    
+    let adminText = "⚙️ *ADMIN PANEL*\n\n";
+    adminText += "Gunakan perintah-perintah berikut dengan mengetikkannya di chat:\n\n";
+    adminText += "📢 `/bc` : Broadcast (Reply pesan yang ingin dibroadcast)\n";
+    adminText += "🎁 `/give <id> <jumlah>` : Tambah koin user\n";
+    adminText += "🏢 `/id` : Kelola Workspace ID (Tambah/Hapus/Aktif)\n";
+    adminText += "📖 `/settutorial` : Set tutorial (Reply pesan tutorialnya)\n";
+    adminText += "🔒 `/setsub <grup1> [grup2]` : Set Wajib Subscribe (Maks 2)\n";
+    adminText += "🔓 `/clearsub` : Hapus Wajib Subscribe\n";
+    
+    bot.sendMessage(chatId, adminText, { parse_mode: 'Markdown' });
 
   } else if (data === "menu_rubah") {
     const user = await db.getUser(userId);
