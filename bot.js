@@ -106,7 +106,7 @@ function isSpam(userId) {
 // === Tampilan Main Menu ===
 const { sendCleanMessage } = require('./uiUtils');
 
-async function sendMainMenu(bot, chatId, userMsgId = null) {
+async function getMainMenuKeyboard(chatId) {
   const keyboard = [
     [{ text: "🔄 Rubah Akun" }],
     [{ text: "👤 Profil" }, { text: "🏆 Leaderboard" }],
@@ -115,7 +115,14 @@ async function sendMainMenu(bot, chatId, userMsgId = null) {
   if (await isAdmin(chatId.toString())) {
     keyboard.push([{ text: "⚙️ Admin Panel" }]);
   }
-  
+  return {
+    keyboard: keyboard,
+    resize_keyboard: true,
+    persistent: true
+  };
+}
+
+async function sendMainMenu(bot, chatId, userMsgId = null) {
   const user = await db.getUser(chatId.toString());
   const botInfo = await bot.getMe();
   const botName = botInfo.first_name || "Telekuy Bot";
@@ -126,12 +133,8 @@ async function sendMainMenu(bot, chatId, userMsgId = null) {
 
   return sendCleanMessage(bot, chatId, welcomeText, {
     parse_mode: 'Markdown',
-    reply_markup: {
-      keyboard: keyboard,
-      resize_keyboard: true,
-      persistent: true
-    }
-  });
+    reply_markup: await getMainMenuKeyboard(chatId)
+  }, userMsgId);
 }
 
 // === Perintah /start ===
@@ -234,7 +237,10 @@ bot.on('message', async (msg) => {
     profileTxt += `📧 *Riwayat Invite Sukses (${invitedEmails.length}):*\n`;
     if (invitedEmails.length === 0) profileTxt += "- Belum ada\n";
     else invitedEmails.slice(0, 10).forEach(e => profileTxt += `- ${e.email}\n`); 
-    return sendCleanMessage(bot, chatId, profileTxt, { parse_mode: 'Markdown' });
+    return sendCleanMessage(bot, chatId, profileTxt, { 
+      parse_mode: 'Markdown',
+      reply_markup: await getMainMenuKeyboard(chatId)
+    });
   }
 
   if (text === "🏆 Leaderboard") {
@@ -243,7 +249,10 @@ bot.on('message', async (msg) => {
     tops.forEach((t, i) => {
       leadTxt += `${i+1}. ${t.full_name || t.username} (\`${t.telegram_id}\`) - 💰 ${t.coins}\n`;
     });
-    return sendCleanMessage(bot, chatId, leadTxt, { parse_mode: 'Markdown' });
+    return sendCleanMessage(bot, chatId, leadTxt, { 
+      parse_mode: 'Markdown',
+      reply_markup: await getMainMenuKeyboard(chatId)
+    });
   }
 
   if (text === "📖 Tutorial") {
@@ -253,14 +262,21 @@ bot.on('message', async (msg) => {
         const { chat_id, message_id } = JSON.parse(tutData);
         const lastId = getLastBotMsgId(chatId);
         if (lastId) bot.deleteMessage(chatId, lastId).catch(()=>{});
-        const sent = await bot.copyMessage(chatId, chat_id, message_id);
+        
+        const sent = await bot.copyMessage(chatId, chat_id, message_id, {
+          reply_markup: await getMainMenuKeyboard(chatId)
+        });
         setLastBotMsgId(chatId, sent.message_id);
         return sent;
       } catch(e) {
-        return sendCleanMessage(bot, chatId, "❌ Tutorial belum di-set dengan benar.");
+        return sendCleanMessage(bot, chatId, "❌ Tutorial belum di-set dengan benar.", {
+          reply_markup: await getMainMenuKeyboard(chatId)
+        });
       }
     }
-    return sendCleanMessage(bot, chatId, "Belum ada tutorial yang di-set oleh Admin.");
+    return sendCleanMessage(bot, chatId, "Belum ada tutorial yang di-set oleh Admin.", {
+      reply_markup: await getMainMenuKeyboard(chatId)
+    });
   }
 
   if (text === "⚙️ Admin Panel") {
