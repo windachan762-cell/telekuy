@@ -1,0 +1,49 @@
+name: Auto Invite Worker
+
+on:
+  workflow_dispatch:
+    inputs:
+      cookie:
+        description: 'Cookie string'
+        required: true
+      email:
+        description: 'Target email'
+        required: true
+      user_id:
+        description: 'Telegram User ID'
+        required: true
+      workspace_id:
+        description: 'Workspace ID'
+        required: true
+      chat_id:
+        description: 'Telegram Chat ID'
+        required: true
+
+jobs:
+  run-puppeteer:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: |
+          npm install
+          sudo apt-get update && sudo apt-get install -y xvfb
+
+      - name: Run Invite Script
+        env:
+          COOKIE: ${{ github.event.inputs.cookie }}
+          EMAIL: ${{ github.event.inputs.email }}
+          USER_ID: ${{ github.event.inputs.user_id }}
+          WORKSPACE_ID: ${{ github.event.inputs.workspace_id }}
+          CHAT_ID: ${{ github.event.inputs.chat_id }}
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: xvfb-run --auto-servernum node .github/scripts/run_invite.js
