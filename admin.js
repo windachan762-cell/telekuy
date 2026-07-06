@@ -1,140 +1,209 @@
 const { db } = require('./database');
+const { setState, clearState } = require('./stateManager');
 
 async function isAdmin(telegramId) {
   const adminIds = process.env.ADMIN_IDS ? process.env.ADMIN_IDS.split(',').map(id => id.trim()) : [];
   return adminIds.includes(telegramId.toString());
 }
 
+async function sendAdminMenu(bot, chatId) {
+  const keyboard = [
+    [{ text: "📢 Broadcast" }, { text: "🎁 Give Koin" }],
+    [{ text: "🏢 Kelola Workspace" }, { text: "📖 Set Tutorial" }],
+    [{ text: "🔒 Set Wajib Sub" }, { text: "🔓 Hapus Wajib Sub" }],
+    [{ text: "🔙 Kembali ke Menu Utama" }]
+  ];
+
+  bot.sendMessage(chatId, "⚙️ *ADMIN PANEL*\nSilakan pilih menu di bawah ini:", {
+    parse_mode: 'Markdown',
+    reply_markup: {
+      keyboard: keyboard,
+      resize_keyboard: true,
+      persistent: true
+    }
+  });
+}
+
+// Fallback jika admin masih pakai command lama manual
 async function handleAdminCommand(bot, msg, command, args) {
   const chatId = msg.chat.id;
-  const telegramId = msg.from.id;
-
-  if (!(await isAdmin(telegramId))) {
-    return bot.sendMessage(chatId, "❌ Akses ditolak. Anda bukan admin.");
-  }
-
-  switch (command) {
-    case '/bc':
-      if (!msg.reply_to_message) {
-        return bot.sendMessage(chatId, "Gunakan perintah /bc dengan me-reply pesan yang ingin dibroadcast.");
-      }
-      
-      try {
-        const users = (await db.client.execute("SELECT telegram_id FROM users")).rows;
-        let success = 0, fail = 0;
-        
-        bot.sendMessage(chatId, `Mulai broadcast ke ${users.length} user...`);
-        
-        for (const user of users) {
-          try {
-            await bot.copyMessage(user.telegram_id, chatId, msg.reply_to_message.message_id);
-            success++;
-          } catch (e) {
-            fail++;
-          }
-        }
-        bot.sendMessage(chatId, `✅ Broadcast Selesai.\nSukses: ${success}\nGagal: ${fail}`);
-      } catch (err) {
-        bot.sendMessage(chatId, "❌ Error broadcast: " + err.message);
-      }
-      break;
-
-    case '/give':
-      if (args.length < 2) {
-        return bot.sendMessage(chatId, "Format: /give <telegram_id> <jumlah_koin>");
-      }
-      const targetId = args[0];
-      const amount = parseInt(args[1]);
-      
-      if (isNaN(amount)) return bot.sendMessage(chatId, "Jumlah koin tidak valid.");
-      
-      try {
-        const targetUser = await db.getUser(targetId);
-        if (!targetUser) return bot.sendMessage(chatId, "User tidak ditemukan di database.");
-        
-        await db.updateCoins(targetId, amount);
-        bot.sendMessage(chatId, `✅ Berhasil menambahkan ${amount} koin ke ID ${targetId}.`);
-        bot.sendMessage(targetId, `🎁 Selamat! Anda mendapatkan ${amount} koin dari Admin.`);
-      } catch (err) {
-        bot.sendMessage(chatId, "❌ Gagal give koin: " + err.message);
-      }
-      break;
-
-    case '/setch':
-      if (args.length < 1) return bot.sendMessage(chatId, "Format: /setch <channel_id_atau_username>");
-      await db.setSetting('log_channel_id', args[0]);
-      bot.sendMessage(chatId, `✅ Channel log diatur ke ${args[0]}`);
-      break;
-
-    case '/settutorial':
-      if (!msg.reply_to_message) {
-        return bot.sendMessage(chatId, "Gunakan perintah /settutorial dengan me-reply pesan yang ingin dijadikan tutorial.");
-      }
-      // Kita simpan message_id dari pesan yang di-reply, dan chatId tempat pesan itu berada
-      const tutorialData = {
-        chat_id: chatId.toString(),
-        message_id: msg.reply_to_message.message_id
-      };
-      await db.setSetting('tutorial_msg', JSON.stringify(tutorialData));
-      bot.sendMessage(chatId, `✅ Tutorial berhasil diatur berdasarkan pesan yang Anda reply.`);
-      break;
-
-    case '/setsub':
-      // bisa menerima 1 atau 2 channel. contoh: /setsub @channel1 @channel2
-      if (args.length < 1) return bot.sendMessage(chatId, "Format: /setsub <channel1> [channel2]\nContoh: /setsub @grupku");
-      if (args.length > 2) return bot.sendMessage(chatId, "Maksimal 2 channel/grup.");
-      
-      await db.setSetting('force_sub_1', args[0]);
-      if (args.length === 2) {
-        await db.setSetting('force_sub_2', args[1]);
-      } else {
-        await db.deleteSetting('force_sub_2');
-      }
-      bot.sendMessage(chatId, `✅ Channel wajib subscribe diatur ke:\n1. ${args[0]}\n2. ${args[1] || '(Tidak ada)'}`);
-      break;
-      
-    case '/clearsub':
-      await db.deleteSetting('force_sub_1');
-      await db.deleteSetting('force_sub_2');
-      bot.sendMessage(chatId, "✅ Syarat subscribe dihapus.");
-      break;
-
-    case '/id':
-      const workspaces = await db.getWorkspaces();
-      if (args.length > 0 && args[0] === 'add') {
-        if (!args[1]) return bot.sendMessage(chatId, "Format: /id add <workspace_id>");
-        await db.addWorkspace(args[1]);
-        if (workspaces.length === 0) await db.setActiveWorkspace(args[1]); // Set active if it's the first one
-        return bot.sendMessage(chatId, `✅ Workspace ID ${args[1]} ditambahkan.`);
-      }
-      
-      if (args.length > 0 && args[0] === 'del') {
-        if (!args[1]) return bot.sendMessage(chatId, "Format: /id del <workspace_id>");
-        await db.deleteWorkspace(args[1]);
-        return bot.sendMessage(chatId, `✅ Workspace ID ${args[1]} dihapus.`);
-      }
-
-      if (args.length > 0 && args[0] === 'set') {
-        if (!args[1]) return bot.sendMessage(chatId, "Format: /id set <workspace_id>");
-        await db.setActiveWorkspace(args[1]);
-        return bot.sendMessage(chatId, `✅ Workspace aktif diubah ke ${args[1]}.`);
-      }
-
-      let wsText = "🏢 *Daftar Workspace ID:*\n\n";
-      for (const w of workspaces) {
-        wsText += `- \`${w.workspace_id}\` ${w.is_active ? '✅ (Aktif)' : ''}\n`;
-      }
-      wsText += "\n*Cara Mengelola:*\n";
-      wsText += "➕ Tambah: `/id add <id_workspace>`\n";
-      wsText += "❌ Hapus: `/id del <id_workspace>`\n";
-      wsText += "👉 Set Aktif: `/id set <id_workspace>`";
-      
-      bot.sendMessage(chatId, wsText, { parse_mode: 'Markdown' });
-      break;
-
-    default:
-      bot.sendMessage(chatId, "Perintah admin tidak dikenali.");
+  if (command === '/clearsub') {
+    await db.deleteSetting('force_sub_1');
+    await db.deleteSetting('force_sub_2');
+    bot.sendMessage(chatId, "✅ Syarat subscribe dihapus.");
   }
 }
 
-module.exports = { handleAdminCommand, isAdmin };
+// Menangani State-Driven Admin Menu
+async function handleAdminState(bot, msg, stateObj) {
+  const chatId = msg.chat.id;
+  const text = msg.text;
+  const state = stateObj.state;
+
+  // Tangani Cek Teks Tombol Admin
+  if (text === "📢 Broadcast") {
+    setState(chatId, 'ADMIN_BC_WAIT_MSG');
+    return bot.sendMessage(chatId, "Silakan ketik atau teruskan (forward) pesan yang ingin dibroadcast ke semua user:", {
+      reply_markup: { keyboard: [[{ text: "🔙 Batal" }]], resize_keyboard: true }
+    });
+  }
+  if (text === "🎁 Give Koin") {
+    setState(chatId, 'ADMIN_GIVE_WAIT_ID');
+    return bot.sendMessage(chatId, "Masukkan *ID Telegram* pengguna yang ingin diberi koin:", {
+      parse_mode: 'Markdown',
+      reply_markup: { keyboard: [[{ text: "🔙 Batal" }]], resize_keyboard: true }
+    });
+  }
+  if (text === "🏢 Kelola Workspace") {
+    return handleWorkspaceMenu(bot, chatId);
+  }
+  if (text === "📖 Set Tutorial") {
+    setState(chatId, 'ADMIN_TUTORIAL_WAIT_MSG');
+    return bot.sendMessage(chatId, "Silakan kirim pesan (teks/gambar/file) yang akan dijadikan isi tombol Tutorial:", {
+      reply_markup: { keyboard: [[{ text: "🔙 Batal" }]], resize_keyboard: true }
+    });
+  }
+  if (text === "🔒 Set Wajib Sub") {
+    setState(chatId, 'ADMIN_SUB_WAIT_LINK');
+    return bot.sendMessage(chatId, "Masukkan link atau username channel/grup (Maksimal 2, pisahkan dengan spasi).\n\nContoh: `t.me/grup1 t.me/grup2`", {
+      parse_mode: 'Markdown',
+      reply_markup: { keyboard: [[{ text: "🔙 Batal" }]], resize_keyboard: true }
+    });
+  }
+  if (text === "🔓 Hapus Wajib Sub") {
+    await db.deleteSetting('force_sub_1');
+    await db.deleteSetting('force_sub_2');
+    return bot.sendMessage(chatId, "✅ Seluruh syarat join channel (Force Sub) berhasil dihapus.");
+  }
+
+  // Menangani input berdasarkan state
+  if (state === 'ADMIN_BC_WAIT_MSG') {
+    try {
+      const users = (await db.client.execute("SELECT telegram_id FROM users")).rows;
+      let success = 0, fail = 0;
+      bot.sendMessage(chatId, `Mulai broadcast ke ${users.length} user...`);
+      for (const user of users) {
+        try {
+          await bot.copyMessage(user.telegram_id, chatId, msg.message_id);
+          success++;
+        } catch (e) { fail++; }
+      }
+      bot.sendMessage(chatId, `✅ Broadcast Selesai.\nSukses: ${success}\nGagal: ${fail}`);
+    } catch (err) { bot.sendMessage(chatId, "❌ Error broadcast: " + err.message); }
+    clearState(chatId);
+    return sendAdminMenu(bot, chatId);
+  }
+
+  if (state === 'ADMIN_GIVE_WAIT_ID') {
+    if (!text) return bot.sendMessage(chatId, "Masukkan ID berupa angka.");
+    setState(chatId, 'ADMIN_GIVE_WAIT_AMOUNT', { targetId: text });
+    return bot.sendMessage(chatId, "Masukkan *jumlah koin* yang ingin diberikan:", { parse_mode: 'Markdown' });
+  }
+  
+  if (state === 'ADMIN_GIVE_WAIT_AMOUNT') {
+    const amount = parseInt(text);
+    if (isNaN(amount)) return bot.sendMessage(chatId, "Jumlah koin tidak valid. Harus angka.");
+    
+    const targetId = stateObj.data.targetId;
+    try {
+      const targetUser = await db.getUser(targetId);
+      if (!targetUser) {
+        bot.sendMessage(chatId, "User tidak ditemukan di database.");
+      } else {
+        await db.updateCoins(targetId, amount);
+        bot.sendMessage(chatId, `✅ Berhasil menambahkan ${amount} koin ke ID ${targetId}.`);
+        bot.sendMessage(targetId, `🎁 Selamat! Anda mendapatkan ${amount} koin dari Admin.`);
+      }
+    } catch (err) {}
+    clearState(chatId);
+    return sendAdminMenu(bot, chatId);
+  }
+
+  if (state === 'ADMIN_TUTORIAL_WAIT_MSG') {
+    const tutorialData = {
+      chat_id: chatId.toString(),
+      message_id: msg.message_id
+    };
+    await db.setSetting('tutorial_msg', JSON.stringify(tutorialData));
+    bot.sendMessage(chatId, `✅ Tutorial berhasil diatur.`);
+    clearState(chatId);
+    return sendAdminMenu(bot, chatId);
+  }
+
+  if (state === 'ADMIN_SUB_WAIT_LINK') {
+    if (!text) return bot.sendMessage(chatId, "Harus berupa teks.");
+    const args = text.split(/\s+/);
+    if (args.length > 2) return bot.sendMessage(chatId, "Maksimal 2 channel/grup.");
+      
+    await db.setSetting('force_sub_1', args[0]);
+    if (args.length === 2) {
+      await db.setSetting('force_sub_2', args[1]);
+    } else {
+      await db.deleteSetting('force_sub_2');
+    }
+    bot.sendMessage(chatId, `✅ Channel wajib subscribe diatur ke:\n1. ${args[0]}\n2. ${args[1] || '(Tidak ada)'}`);
+    clearState(chatId);
+    return sendAdminMenu(bot, chatId);
+  }
+
+  // --- Kelola Workspace States ---
+  if (state === 'ADMIN_WS_ADD') {
+    if (!text) return bot.sendMessage(chatId, "Kirimkan Workspace ID berupa teks.");
+    await db.addWorkspace(text);
+    const workspaces = await db.getWorkspaces();
+    if (workspaces.length === 1) await db.setActiveWorkspace(text);
+    bot.sendMessage(chatId, `✅ Workspace ID ${text} berhasil ditambahkan.`);
+    clearState(chatId);
+    return handleWorkspaceMenu(bot, chatId);
+  }
+  
+  if (state === 'ADMIN_WS_DEL') {
+    await db.deleteWorkspace(text);
+    bot.sendMessage(chatId, `✅ Workspace ID ${text} berhasil dihapus.`);
+    clearState(chatId);
+    return handleWorkspaceMenu(bot, chatId);
+  }
+  
+  if (state === 'ADMIN_WS_SET') {
+    await db.setActiveWorkspace(text);
+    bot.sendMessage(chatId, `✅ Workspace ID ${text} berhasil diset aktif.`);
+    clearState(chatId);
+    return handleWorkspaceMenu(bot, chatId);
+  }
+
+  // Jika tombol yang ditekan adalah Kelola Workspace menu
+  if (text === "➕ Tambah WS") {
+    setState(chatId, 'ADMIN_WS_ADD');
+    return bot.sendMessage(chatId, "Masukkan Workspace ID baru:", { reply_markup: { keyboard: [[{ text: "🔙 Batal" }]], resize_keyboard: true } });
+  }
+  if (text === "❌ Hapus WS") {
+    setState(chatId, 'ADMIN_WS_DEL');
+    return bot.sendMessage(chatId, "Masukkan Workspace ID yang ingin dihapus:", { reply_markup: { keyboard: [[{ text: "🔙 Batal" }]], resize_keyboard: true } });
+  }
+  if (text === "👉 Set Aktif WS") {
+    setState(chatId, 'ADMIN_WS_SET');
+    return bot.sendMessage(chatId, "Masukkan Workspace ID yang ingin diset aktif:", { reply_markup: { keyboard: [[{ text: "🔙 Batal" }]], resize_keyboard: true } });
+  }
+}
+
+async function handleWorkspaceMenu(bot, chatId) {
+  const workspaces = await db.getWorkspaces();
+  let wsText = "🏢 *Daftar Workspace ID:*\n\n";
+  if (workspaces.length === 0) wsText += "_Belum ada data._\n";
+  for (const w of workspaces) {
+    wsText += `- \`${w.workspace_id}\` ${w.is_active ? '✅ (Aktif)' : ''}\n`;
+  }
+  
+  bot.sendMessage(chatId, wsText, { 
+    parse_mode: 'Markdown',
+    reply_markup: {
+      keyboard: [
+        [{ text: "➕ Tambah WS" }, { text: "❌ Hapus WS" }, { text: "👉 Set Aktif WS" }],
+        [{ text: "⚙️ Admin Panel" }] // Kembali ke admin
+      ],
+      resize_keyboard: true
+    }
+  });
+}
+
+module.exports = { handleAdminCommand, handleAdminState, sendAdminMenu, isAdmin };
