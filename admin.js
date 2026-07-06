@@ -32,6 +32,36 @@ async function handleAdminCommand(bot, msg, command, args) {
     await db.deleteSetting('force_sub_2');
     bot.sendMessage(chatId, "✅ Syarat subscribe dihapus.");
   }
+  
+  if (command === '/bc' || command === '/settutor') {
+    if (!msg.reply_to_message) {
+      return bot.sendMessage(chatId, `❌ Mohon reply pesan yang ingin digunakan dengan perintah ${command}`);
+    }
+
+    if (command === '/bc') {
+      try {
+        const users = (await db.client.execute("SELECT telegram_id FROM users")).rows;
+        let success = 0, fail = 0;
+        bot.sendMessage(chatId, `Mulai broadcast ke ${users.length} user...`);
+        for (const user of users) {
+          try {
+            await bot.copyMessage(user.telegram_id, chatId, msg.reply_to_message.message_id);
+            success++;
+          } catch (e) { fail++; }
+        }
+        return bot.sendMessage(chatId, `✅ Broadcast Selesai.\nSukses: ${success}\nGagal: ${fail}`);
+      } catch (err) { return bot.sendMessage(chatId, "❌ Error broadcast: " + err.message); }
+    }
+
+    if (command === '/settutor') {
+      const tutorialData = {
+        chat_id: chatId.toString(),
+        message_id: msg.reply_to_message.message_id
+      };
+      await db.setSetting('tutorial_msg', JSON.stringify(tutorialData));
+      return bot.sendMessage(chatId, `✅ Tutorial berhasil diatur.`);
+    }
+  }
 }
 
 // Menangani State-Driven Admin Menu

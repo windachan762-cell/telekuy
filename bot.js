@@ -175,8 +175,10 @@ bot.on('message', async (msg) => {
     // Tangani admin commands jika masih diakses manual (contoh: /bc)
     const args = msg.text.split(' ');
     const cmd = args.shift();
-    if (['/clearsub'].includes(cmd)) {
-      return handleAdminCommand(bot, msg, cmd, args);
+    if (['/clearsub', '/bc', '/settutor'].includes(cmd)) {
+      if (await isAdmin(msg.from.id)) {
+        return handleAdminCommand(bot, msg, cmd, args);
+      }
     }
     // Command menu lain akan diarahkan via tombol. Abaikan saja.
     if(cmd === '/start') return;
