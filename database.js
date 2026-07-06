@@ -151,6 +151,60 @@ const db = {
       sql: "DELETE FROM settings WHERE key = ?",
       args: [key]
     });
+  },
+
+  // --- BACKUP / RESTORE ---
+  async exportData() {
+    const data = {};
+    const tables = ['users', 'invited_history', 'workspace_ids', 'settings'];
+    for (const table of tables) {
+      const res = await client.execute(`SELECT * FROM ${table}`);
+      data[table] = res.rows;
+    }
+    return JSON.stringify(data, null, 2);
+  },
+
+  async importData(jsonData) {
+    const data = JSON.parse(jsonData);
+    
+    // Bersihkan tabel sebelum import
+    await client.execute("DELETE FROM users");
+    await client.execute("DELETE FROM invited_history");
+    await client.execute("DELETE FROM workspace_ids");
+    await client.execute("DELETE FROM settings");
+
+    if (data.users) {
+      for (const user of data.users) {
+        await client.execute({
+          sql: "INSERT INTO users (id, telegram_id, username, full_name, coins, referrer_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+          args: [user.id, user.telegram_id, user.username, user.full_name, user.coins, user.referrer_id, user.created_at]
+        });
+      }
+    }
+    if (data.invited_history) {
+      for (const h of data.invited_history) {
+        await client.execute({
+          sql: "INSERT INTO invited_history (id, user_id, email, status, timestamp) VALUES (?, ?, ?, ?, ?)",
+          args: [h.id, h.user_id, h.email, h.status, h.timestamp]
+        });
+      }
+    }
+    if (data.workspace_ids) {
+      for (const ws of data.workspace_ids) {
+        await client.execute({
+          sql: "INSERT INTO workspace_ids (id, workspace_id, is_active) VALUES (?, ?, ?)",
+          args: [ws.id, ws.workspace_id, ws.is_active]
+        });
+      }
+    }
+    if (data.settings) {
+      for (const s of data.settings) {
+        await client.execute({
+          sql: "INSERT INTO settings (key, value) VALUES (?, ?)",
+          args: [s.key, s.value]
+        });
+      }
+    }
   }
 };
 

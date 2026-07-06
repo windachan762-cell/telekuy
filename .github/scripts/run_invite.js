@@ -26,11 +26,16 @@ const TelegramBot = TelegramBotObj.default || TelegramBotObj;
     await initDB();
 
     const result = await runInviteScript(cookieStr);
+    const logChannel = await db.getSetting('log_channel');
 
     if (result.success) {
       console.log("✅ Invite sukses!");
       await db.addInviteHistory(userId, email, 'SUCCESS');
       await bot.sendMessage(chatId, `✅ *SUCCESS!* Invite ke workspace berhasil dikirim ke email: \`${email}\`\n\nSilakan cek inbox/spam email Anda.`, { parse_mode: 'Markdown' });
+      
+      if (logChannel) {
+        await bot.sendMessage(logChannel, `✅ [BERHASIL] User \`${userId}\` berhasil invite Email: ${email}`, { parse_mode: 'Markdown' }).catch(()=>{});
+      }
     } else {
       console.error("❌ Invite gagal:", result.message);
       
@@ -39,6 +44,10 @@ const TelegramBot = TelegramBotObj.default || TelegramBotObj;
       
       let errMsg = `❌ *Gagal mengirim invite!*\n\nAlasan: ${result.message}\n\nKoin Anda (1) telah dikembalikan.`;
       await bot.sendMessage(chatId, errMsg, { parse_mode: 'Markdown' });
+
+      if (logChannel) {
+        await bot.sendMessage(logChannel, `❌ [GAGAL] User \`${userId}\` gagal invite Email: ${email}.\nAlasan: ${result.message}\nKoin telah dikembalikan.`, { parse_mode: 'Markdown' }).catch(()=>{});
+      }
     }
   } catch (error) {
     console.error("❌ Fatal error during run_invite:", error);

@@ -263,7 +263,8 @@ bot.on('message', async (msg) => {
   const adminMenus = [
     "📢 Broadcast", "🎁 Give Koin", "🏢 Kelola Workspace",
     "📖 Set Tutorial", "🔒 Set Wajib Sub", "🔓 Hapus Wajib Sub",
-    "➕ Tambah WS", "❌ Hapus WS", "👉 Set Aktif WS"
+    "➕ Tambah WS", "❌ Hapus WS", "👉 Set Aktif WS",
+    "📊 Kelola Log", "📤 Backup DB", "📥 Restore DB"
   ];
 
   if ((stateObj.state && stateObj.state.startsWith('ADMIN_')) || adminMenus.includes(text)) {

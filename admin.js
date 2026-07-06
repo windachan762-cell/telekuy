@@ -11,7 +11,8 @@ async function sendAdminMenu(bot, chatId) {
     [{ text: "📢 Broadcast" }, { text: "🎁 Give Koin" }],
     [{ text: "🏢 Kelola Workspace" }, { text: "📖 Set Tutorial" }],
     [{ text: "🔒 Set Wajib Sub" }, { text: "🔓 Hapus Wajib Sub" }],
-    [{ text: "🔙 Kembali ke Menu Utama" }]
+    [{ text: "📊 Kelola Log" }, { text: "📤 Backup DB" }],
+    [{ text: "📥 Restore DB" }, { text: "🔙 Kembali ke Menu Utama" }]
   ];
 
   bot.sendMessage(chatId, "⚙️ *ADMIN PANEL*\nSilakan pilih menu di bawah ini:", {
@@ -107,8 +108,85 @@ async function handleAdminState(bot, msg, stateObj) {
     await db.deleteSetting('force_sub_2');
     return bot.sendMessage(chatId, "✅ Seluruh syarat join channel (Force Sub) berhasil dihapus.");
   }
+  
+  if (text === "📊 Kelola Log") {
+    const curLog = await db.getSetting('log_channel');
+    setState(chatId, 'ADMIN_LOG_WAIT_ID');
+    let msgStr = `*PENGATURAN CHANNEL LOG*\n\nSaat ini: ${curLog || 'Belum di-set'}\n\nSilakan kirimkan ID Channel atau Username (contoh: -100123456789 atau @logku):`;
+    return bot.sendMessage(chatId, msgStr, {
+      parse_mode: 'Markdown',
+      reply_markup: { keyboard: [[{ text: "🗑️ Hapus Log" }], [{ text: "🔙 Batal" }]], resize_keyboard: true }
+    });
+  }
+
+  if (text === "📤 Backup DB") {
+    bot.sendMessage(chatId, "⏳ Memproses backup...");
+    try {
+      const jsonData = await db.exportData();
+      const date = new Date();
+      const d = String(date.getDate()).padStart(2, '0');
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const y = date.getFullYear();
+      const filename = `backup_${d}_${m}_${y}.json`;
+      
+      const fileBuffer = Buffer.from(jsonData, 'utf-8');
+      await bot.sendDocument(chatId, fileBuffer, { caption: "📦 Backup Database Turso Selesai!" }, { filename: filename, contentType: 'application/json' });
+      
+      const logChannel = await db.getSetting('log_channel');
+      if (logChannel) {
+        try {
+          await bot.sendDocument(logChannel, fileBuffer, { caption: "📦 Auto/Manual Backup" }, { filename: filename, contentType: 'application/json' });
+        } catch(e) {}
+      }
+    } catch(err) {
+      bot.sendMessage(chatId, "❌ Gagal backup: " + err.message);
+    }
+    return sendAdminMenu(bot, chatId);
+  }
+
+  if (text === "📥 Restore DB") {
+    setState(chatId, 'ADMIN_RESTORE_WAIT_FILE');
+    return bot.sendMessage(chatId, "⚠️ *PERINGATAN BAHAYA!*\n\nData saat ini akan DIHAPUS TOTAL dan digantikan oleh file backup.\n\nKirimkan file `backup_*.json` sekarang:", {
+      parse_mode: 'Markdown',
+      reply_markup: { keyboard: [[{ text: "🔙 Batal" }]], resize_keyboard: true }
+    });
+  }
 
   // Menangani input berdasarkan state
+  if (state === 'ADMIN_LOG_WAIT_ID') {
+    if (text === "🗑️ Hapus Log") {
+      await db.deleteSetting('log_channel');
+      bot.sendMessage(chatId, "✅ Channel Log berhasil dihapus.");
+    } else {
+      await db.setSetting('log_channel', text);
+      bot.sendMessage(chatId, `✅ Channel Log diset ke: ${text}\nPastikan bot sudah dijadikan admin di channel tersebut!`);
+    }
+    clearState(chatId);
+    return sendAdminMenu(bot, chatId);
+  }
+
+  if (state === 'ADMIN_RESTORE_WAIT_FILE') {
+    if (msg.document && msg.document.file_name.endsWith('.json')) {
+      bot.sendMessage(chatId, "⏳ Mengunduh file backup...");
+      try {
+        const fileUrl = await bot.getFileLink(msg.document.file_id);
+        const res = await fetch(fileUrl);
+        const jsonData = await res.text();
+        
+        bot.sendMessage(chatId, "🔄 Merestore database ke Turso...");
+        await db.importData(jsonData);
+        bot.sendMessage(chatId, "✅ Restore Database Berhasil!");
+      } catch (err) {
+        bot.sendMessage(chatId, `❌ Gagal restore: ${err.message}`);
+      }
+    } else {
+      bot.sendMessage(chatId, "❌ File tidak valid, batalkan atau kirim file .json");
+      return;
+    }
+    clearState(chatId);
+    return sendAdminMenu(bot, chatId);
+  }
+
   if (state === 'ADMIN_BC_WAIT_MSG') {
     try {
       const users = (await db.client.execute("SELECT telegram_id FROM users")).rows;
