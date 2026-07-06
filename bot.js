@@ -30,7 +30,11 @@ async function checkForceSub(chatId, userId) {
     if (!val) return null;
     if (val.startsWith('-100')) return val; // Private ID
     if (val.startsWith('http') || val.startsWith('t.me/')) {
-      return '@' + val.split('/').pop().replace('+', ''); // Ekstrak dari t.me/nama
+      // Hapus query parameters seperti ?boost=1
+      let clean = val.split('?')[0];
+      // Hapus trailing slash jika ada
+      if (clean.endsWith('/')) clean = clean.slice(0, -1);
+      return '@' + clean.split('/').pop().replace('+', ''); 
     }
     if (!val.startsWith('@')) return '@' + val;
     return val;
@@ -43,13 +47,19 @@ async function checkForceSub(chatId, userId) {
     try {
       const chatMember = await bot.getChatMember(c1, userId);
       if (['left', 'kicked'].includes(chatMember.status)) notJoined.push(force1);
-    } catch (e) { console.error("Force sub 1 error:", e.message); }
+    } catch (e) { 
+      console.error(`Force sub 1 (${c1}) error:`, e.message); 
+      notJoined.push(force1); // Blokir jika bot gagal cek (bot belum jadi admin)
+    }
   }
   if (c2) {
     try {
       const chatMember = await bot.getChatMember(c2, userId);
       if (['left', 'kicked'].includes(chatMember.status)) notJoined.push(force2);
-    } catch (e) { console.error("Force sub 2 error:", e.message); }
+    } catch (e) { 
+      console.error(`Force sub 2 (${c2}) error:`, e.message); 
+      notJoined.push(force2); // Blokir jika bot gagal cek (bot belum jadi admin)
+    }
   }
 
   if (notJoined.length > 0) {
