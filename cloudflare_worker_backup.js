@@ -1,18 +1,16 @@
-/**
- * CLOUDFLARE WORKER SCRIPT: Auto Backup Database Turso ke Telegram
- * 
- * Cara Penggunaan:
- * 1. Buat Worker baru di Cloudflare Dashboard.
- * 2. Paste seluruh kode ini ke dalam file worker.js.
- * 3. Masuk ke tab Settings -> Variables -> Environment Variables, tambahkan:
- *    - TURSO_URL : URL database Anda (ganti libsql:// menjadi https://)
- *                  Contoh: https://botgpt-windachan762-cell.aws-ap-northeast-1.turso.io
- *    - TURSO_TOKEN : Token auth Turso Anda
- *    - TELEGRAM_TOKEN : Token Bot Telegram Anda
- * 4. Masuk ke tab Triggers -> Cron Triggers, tambahkan jadwal 12 jam sekali:
- *    - Cron expression: 0 */12 * * *
- * 5. Deploy!
- */
+// CLOUDFLARE WORKER SCRIPT: Auto Backup Database Turso ke Telegram
+// 
+// Cara Penggunaan:
+// 1. Buat Worker baru di Cloudflare Dashboard.
+// 2. Paste seluruh kode ini ke dalam file worker.js.
+// 3. Masuk ke tab Settings -> Variables -> Environment Variables, tambahkan:
+//    - TURSO_URL : URL database Anda (ganti libsql:// menjadi https://)
+//                  Contoh: https://botgpt-windachan762-cell.aws-ap-northeast-1.turso.io
+//    - TURSO_TOKEN : Token auth Turso Anda
+//    - TELEGRAM_TOKEN : Token Bot Telegram Anda
+// 4. Masuk ke tab Triggers -> Cron Triggers, tambahkan jadwal 12 jam sekali:
+//    - Cron expression: 0 */12 * * *
+// 5. Deploy!
 
 export default {
   async scheduled(event, env, ctx) {
