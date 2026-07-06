@@ -1,23 +1,42 @@
 const states = {};
 
-// states = { [chatId]: { state: 'WAITING_FOR_EMAIL', data: {} } }
-
-function setState(chatId, state, data = {}) {
-  states[chatId] = { state, data };
+function setState(chatId, stateStr, data = {}) {
+  if (!states[chatId]) states[chatId] = {};
+  states[chatId].state = stateStr;
+  states[chatId].data = data;
 }
 
 function getState(chatId) {
   return states[chatId] || { state: null, data: {} };
 }
 
-function updateStateData(chatId, newData) {
-  if (states[chatId]) {
-    states[chatId].data = { ...states[chatId].data, ...newData };
+function updateStateData(chatId, key, value) {
+  if (states[chatId] && states[chatId].data) {
+    states[chatId].data[key] = value;
   }
 }
 
 function clearState(chatId) {
-  delete states[chatId];
+  if (states[chatId]) {
+    const lastBotMsgId = states[chatId].last_bot_msg_id;
+    states[chatId] = { last_bot_msg_id: lastBotMsgId };
+  }
 }
 
-module.exports = { setState, getState, updateStateData, clearState };
+function setLastBotMsgId(chatId, msgId) {
+  if (!states[chatId]) states[chatId] = {};
+  states[chatId].last_bot_msg_id = msgId;
+}
+
+function getLastBotMsgId(chatId) {
+  return states[chatId] ? states[chatId].last_bot_msg_id : null;
+}
+
+module.exports = {
+  setState,
+  getState,
+  updateStateData,
+  clearState,
+  setLastBotMsgId,
+  getLastBotMsgId
+};

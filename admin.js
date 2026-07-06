@@ -1,12 +1,13 @@
 const { db } = require('./database');
 const { setState, clearState } = require('./stateManager');
+const { sendCleanMessage } = require('./uiUtils');
 
 async function isAdmin(telegramId) {
   const adminIds = process.env.ADMIN_IDS ? process.env.ADMIN_IDS.split(',').map(id => id.trim()) : [];
   return adminIds.includes(telegramId.toString());
 }
 
-async function sendAdminMenu(bot, chatId) {
+async function sendAdminMenu(bot, chatId, userMsgId = null) {
   const keyboard = [
     [{ text: "📢 Broadcast" }, { text: "🎁 Give Koin" }],
     [{ text: "🏢 Kelola Workspace" }, { text: "📖 Set Tutorial" }],
@@ -15,14 +16,14 @@ async function sendAdminMenu(bot, chatId) {
     [{ text: "📥 Restore DB" }, { text: "🔙 Kembali ke Menu Utama" }]
   ];
 
-  bot.sendMessage(chatId, "⚙️ *ADMIN PANEL*\nSilakan pilih menu di bawah ini:", {
+  return sendCleanMessage(bot, chatId, "⚙️ *ADMIN PANEL*\nSilakan pilih menu di bawah ini:", {
     parse_mode: 'Markdown',
     reply_markup: {
       keyboard: keyboard,
       resize_keyboard: true,
       persistent: true
     }
-  });
+  }, userMsgId);
 }
 
 // Fallback jika admin masih pakai command lama manual

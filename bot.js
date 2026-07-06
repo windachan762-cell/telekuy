@@ -104,21 +104,27 @@ function isSpam(userId) {
 }
 
 // === Tampilan Main Menu ===
-async function sendMainMenu(chatId, userId) {
-  clearState(chatId);
-  const user = await db.getUser(userId);
-  
+const { sendCleanMessage } = require('./uiUtils');
+
+async function sendMainMenu(bot, chatId, userMsgId = null) {
   const keyboard = [
     [{ text: "🔄 Rubah Akun" }],
     [{ text: "👤 Profil" }, { text: "🏆 Leaderboard" }],
     [{ text: "📖 Tutorial" }]
   ];
-
-  if (await isAdmin(userId)) {
+  if (await isAdmin(chatId.toString())) {
     keyboard.push([{ text: "⚙️ Admin Panel" }]);
   }
+  
+  const user = await db.getUser(chatId.toString());
+  const botInfo = await bot.getMe();
+  const botName = botInfo.first_name || "Telekuy Bot";
+  const userCoins = user ? user.coins : 2;
+  const fullName = user ? (user.full_name || user.username || "Pengguna") : "Pengguna";
 
-  bot.sendMessage(chatId, `🤖 *Selamat Datang di Bot Auto-Invite ChatGPT Workspace!*\n\nKoin Anda saat ini: 💰 *${user.coins}*\n\nSilakan pilih menu di bawah ini:`, {
+  const welcomeText = `👋 Halo, *${fullName}*!\nSelamat datang di *${botName}* 🤖\n\n━━━━━━━━━━━━━━━━━━\n👤 *INFORMASI AKUN*\n🆔 ID Anda : \`${chatId}\`\n🪙 Koin    : *${userCoins} Koin*\n━━━━━━━━━━━━━━━━━━\n\nSilakan pilih menu di bawah ini untuk memulai layanan kami 👇`;
+
+  return sendCleanMessage(bot, chatId, welcomeText, {
     parse_mode: 'Markdown',
     reply_markup: {
       keyboard: keyboard,
@@ -150,7 +156,7 @@ bot.onText(/\/start(?:\s+(.+))?/, async (msg, match) => {
 
   if (!(await checkForceSub(chatId, userId))) return;
 
-  sendMainMenu(chatId, userId);
+  sendMainMenu(bot, chatId, msg.message_id);
 });
 
 // === Penanganan Callback Khusus Force Sub ===
@@ -162,7 +168,7 @@ bot.on('callback_query', async (query) => {
     bot.answerCallbackQuery(query.id);
     if (await checkForceSub(chatId, userId)) {
       bot.sendMessage(chatId, "✅ Terimakasih telah bergabung!");
-      sendMainMenu(chatId, userId);
+      sendMainMenu(bot, chatId);
     } else {
       bot.sendMessage(chatId, "❌ Anda belum bergabung di semua channel yang diwajibkan.");
     }
@@ -177,6 +183,7 @@ bot.on('message', async (msg) => {
     const cmd = args.shift();
     if (['/clearsub', '/bc', '/settutor'].includes(cmd)) {
       if (await isAdmin(msg.from.id)) {
+        bot.deleteMessage(msg.chat.id, msg.message_id).catch(()=>{});
         return handleAdminCommand(bot, msg, cmd, args);
       }
     }
@@ -189,10 +196,25 @@ bot.on('message', async (msg) => {
   
   if (isSpam(userId)) return;
 
+  const text = msg.text || '';
+  
+  // Hapus pesan user (Bot Bersih) jika input adalah salah satu dari menu
+  const allMenus = [
+    "🔄 Rubah Akun", "👤 Profil", "🏆 Leaderboard", "📖 Tutorial", "⚙️ Admin Panel",
+    "🔙 Kembali ke Menu Utama", "🔙 Batal", "📢 Broadcast", "🎁 Give Koin", "🏢 Kelola Workspace",
+    "📖 Set Tutorial", "🔒 Set Wajib Sub", "🔓 Hapus Wajib Sub",
+    "➕ Tambah WS", "❌ Hapus WS", "👉 Set Aktif WS",
+    "📊 Kelola Log", "📤 Backup DB", "📥 Restore DB", "🗑️ Hapus Log", "⏭️ Lewati", "🗑️ Hapus Sub 1", "🗑️ Hapus Sub 2"
+  ];
+  if (allMenus.includes(text)) {
+    bot.deleteMessage(chatId, msg.message_id).catch(() => {});
+  }
+
   // Tangani Cek Menu Bawah
-  const text = msg.text;
   if (text === "🔙 Kembali ke Menu Utama" || text === "🔙 Batal") {
-    return sendMainMenu(chatId, userId);
+    clearState(chatId);
+    // Tidak perlu passing msg.message_id lagi karena sudah dihapus di atas
+    return sendMainMenu(bot, chatId);
   }
 
   if (!(await checkForceSub(chatId, userId))) return;
@@ -212,7 +234,7 @@ bot.on('message', async (msg) => {
     profileTxt += `📧 *Riwayat Invite Sukses (${invitedEmails.length}):*\n`;
     if (invitedEmails.length === 0) profileTxt += "- Belum ada\n";
     else invitedEmails.slice(0, 10).forEach(e => profileTxt += `- ${e.email}\n`); 
-    return bot.sendMessage(chatId, profileTxt, { parse_mode: 'Markdown' });
+    return sendCleanMessage(bot, chatId, profileTxt, { parse_mode: 'Markdown' });
   }
 
   if (text === "🏆 Leaderboard") {
@@ -221,7 +243,7 @@ bot.on('message', async (msg) => {
     tops.forEach((t, i) => {
       leadTxt += `${i+1}. ${t.full_name || t.username} (\`${t.telegram_id}\`) - 💰 ${t.coins}\n`;
     });
-    return bot.sendMessage(chatId, leadTxt, { parse_mode: 'Markdown' });
+    return sendCleanMessage(bot, chatId, leadTxt, { parse_mode: 'Markdown' });
   }
 
   if (text === "📖 Tutorial") {
@@ -229,29 +251,34 @@ bot.on('message', async (msg) => {
     if (tutData) {
       try {
         const { chat_id, message_id } = JSON.parse(tutData);
-        return bot.copyMessage(chatId, chat_id, message_id);
+        const lastId = getLastBotMsgId(chatId);
+        if (lastId) bot.deleteMessage(chatId, lastId).catch(()=>{});
+        const sent = await bot.copyMessage(chatId, chat_id, message_id);
+        setLastBotMsgId(chatId, sent.message_id);
+        return sent;
       } catch(e) {
-        return bot.sendMessage(chatId, "❌ Tutorial belum di-set dengan benar.");
+        return sendCleanMessage(bot, chatId, "❌ Tutorial belum di-set dengan benar.");
       }
     }
-    return bot.sendMessage(chatId, "Belum ada tutorial yang di-set oleh Admin.");
+    return sendCleanMessage(bot, chatId, "Belum ada tutorial yang di-set oleh Admin.");
   }
 
   if (text === "⚙️ Admin Panel") {
     if (!(await isAdmin(userId))) return bot.sendMessage(chatId, "❌ Akses Ditolak!");
+    // Tidak perlu passing msg.message_id karena sudah dihapus otomatis
     return sendAdminMenu(bot, chatId);
   }
 
   if (text === "🔄 Rubah Akun") {
     const user = await db.getUser(userId);
     if (user.coins < 1) {
-      return bot.sendMessage(chatId, "❌ Koin Anda tidak cukup. Undang teman menggunakan link referral Anda untuk mendapatkan koin.");
+      return sendCleanMessage(bot, chatId, "❌ Koin Anda tidak cukup. Undang teman menggunakan link referral Anda untuk mendapatkan koin.");
     }
     const wsId = await db.getActiveWorkspace();
-    if (!wsId) return bot.sendMessage(chatId, "❌ Sistem sedang pemeliharaan. Tidak ada Workspace ID yang aktif.");
+    if (!wsId) return sendCleanMessage(bot, chatId, "❌ Sistem sedang pemeliharaan. Tidak ada Workspace ID yang aktif.");
 
     setState(chatId, 'WAITING_FOR_EMAIL', { wsId: wsId });
-    return bot.sendMessage(chatId, "⚠️ *Peringatan:* Gunakan Gmail cadangan, JANGAN gunakan akun utama Anda!\n\nSilakan kirimkan *ALAMAT EMAIL* Anda (cukup emailnya saja, tanpa password).", { 
+    return sendCleanMessage(bot, chatId, "⚠️ *Peringatan:* Gunakan Gmail cadangan, JANGAN gunakan akun utama Anda!\n\nSilakan kirimkan *ALAMAT EMAIL* Anda (cukup emailnya saja, tanpa password).", { 
       parse_mode: 'Markdown',
       reply_markup: { keyboard: [[{ text: "🔙 Batal" }]], resize_keyboard: true }
     });
