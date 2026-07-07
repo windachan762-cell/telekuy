@@ -129,7 +129,7 @@ async function runInviteScript(cookieString) {
         }
 
         if (r.status === 200) {
-          return { success: true, message: "SUCCESS! Refresh halaman (Ctrl+F5) lalu cek profile!" };
+          return { success: true, message: `SUCCESS! Response: ${JSON.stringify(d)}` };
         } else {
           return { success: false, message: `Error: ${r.status} - ${JSON.stringify(d)}` };
         }
