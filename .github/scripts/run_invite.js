@@ -31,7 +31,7 @@ const TelegramBot = TelegramBotObj.default || TelegramBotObj;
     if (result.success) {
       console.log("✅ Invite sukses!");
       await db.addInviteHistory(userId, email, 'SUCCESS');
-      await bot.sendMessage(chatId, `✅ *SUCCESS!* Invite ke workspace berhasil dikirim ke email: \`${email}\`\n\nSilakan cek inbox/spam email Anda.`, { parse_mode: 'Markdown' });
+      await bot.sendMessage(chatId, `✅ *SUCCESS!*\n\n\`\`\`\n${result.message}\n\`\`\`\nSilakan refresh halaman (Ctrl+F5) ChatGPT Anda lalu cek profile!`, { parse_mode: 'Markdown' });
       
       if (logChannel) {
         await bot.sendMessage(logChannel, `✅ [BERHASIL] User \`${userId}\` berhasil invite Email: ${email}`, { parse_mode: 'Markdown' }).catch(()=>{});
