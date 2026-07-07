@@ -4,9 +4,10 @@ globalThis.process = process;
 import { Bot, webhookCallback } from "grammy";
 import { setupHandlers, setupStateRouter } from "./handlers.js";
 import { processBroadcastChunk, setupAdminHandlers } from "./admin.js";
+import { addTrackedMessage, clearTrackedMessages } from "./state.js";
 
 export default {
-  async fetch(request, env, ctx) {
+  async fetch(request, env, cfCtx) {
     if (!env.TELEGRAM_BOT_TOKEN) {
       return new Response("Bot token tidak ditemukan di environment.", { status: 500 });
     }
@@ -20,7 +21,7 @@ export default {
       
       const payload = await request.json();
       // Lempar ke background agar request HTTP ini cepat selesai (mencegah timeout)
-      ctx.waitUntil(processBroadcastChunk(env, payload, url.origin));
+      cfCtx.waitUntil(processBroadcastChunk(env, payload, url.origin));
       return new Response("OK");
     }
 
@@ -31,7 +32,25 @@ export default {
       bot.use(async (ctx, next) => {
         ctx.env = env;
         ctx.workerOrigin = url.origin;
+        
+        if (ctx.message && ctx.message.text && ctx.message.text.startsWith('/')) {
+          await clearTrackedMessages(env, ctx, ctx.chat.id);
+        }
+        
+        if (ctx.message && ctx.message.message_id && ctx.chat) {
+          cfCtx.waitUntil(addTrackedMessage(env, ctx.chat.id, ctx.message.message_id));
+        }
+        
         await next();
+      });
+
+      // Pasang API transformer untuk tracking outgoing messages
+      bot.api.config.use(async (prev, method, payload, signal) => {
+        const result = await prev(method, payload, signal);
+        if (method.startsWith('send') && result && result.message_id && payload.chat_id) {
+          cfCtx.waitUntil(addTrackedMessage(env, payload.chat_id, result.message_id));
+        }
+        return result;
       });
 
       // Pasang semua logika respon

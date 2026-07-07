@@ -26,6 +26,12 @@ export async function initWorkerDB(env) {
     )
   `);
 
+  try {
+    await db.execute(`ALTER TABLE bot_states ADD COLUMN tracked_msgs TEXT DEFAULT '[]'`);
+  } catch (e) {
+    // Abaikan jika kolom sudah ada
+  }
+
   // Tabel untuk antrian pekerjaan (Jobs Queue)
   await db.execute(`
     CREATE TABLE IF NOT EXISTS jobs_queue (

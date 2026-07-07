@@ -69,3 +69,48 @@ export async function getLastBotMsgId(env, chatId) {
   }
   return null;
 }
+
+export async function addTrackedMessage(env, chatId, msgId) {
+  const db = getDb(env);
+  const result = await db.execute({
+    sql: `SELECT tracked_msgs FROM bot_states WHERE chat_id = ?`,
+    args: [chatId.toString()]
+  });
+  let msgs = [];
+  if (result.rows.length > 0 && result.rows[0].tracked_msgs) {
+    try { msgs = JSON.parse(result.rows[0].tracked_msgs); } catch (e) {}
+  }
+  if (!msgs.includes(msgId)) msgs.push(msgId);
+  
+  await db.execute({
+    sql: `INSERT INTO bot_states (chat_id, tracked_msgs) 
+          VALUES (?, ?) 
+          ON CONFLICT(chat_id) DO UPDATE SET tracked_msgs=excluded.tracked_msgs`,
+    args: [chatId.toString(), JSON.stringify(msgs)]
+  });
+}
+
+export async function clearTrackedMessages(env, ctx, chatId) {
+  const db = getDb(env);
+  const result = await db.execute({
+    sql: `SELECT tracked_msgs FROM bot_states WHERE chat_id = ?`,
+    args: [chatId.toString()]
+  });
+  
+  if (result.rows.length > 0 && result.rows[0].tracked_msgs) {
+    let msgs = [];
+    try { msgs = JSON.parse(result.rows[0].tracked_msgs); } catch (e) {}
+    
+    if (msgs.length > 0) {
+      try {
+        await ctx.api.deleteMessages(chatId, msgs);
+      } catch (e) {
+        // Abaikan jika pesan sudah terhapus
+      }
+      await db.execute({
+        sql: `UPDATE bot_states SET tracked_msgs = '[]' WHERE chat_id = ?`,
+        args: [chatId.toString()]
+      });
+    }
+  }
+}
