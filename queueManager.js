@@ -59,7 +59,7 @@ async function processQueue(bot) {
   const job = queue.shift();
   
   try {
-    bot.sendMessage(job.chatId, "⚙️ Memulai proses invite via sistem cloud (GitHub Actions)...");
+    bot.sendMessage(job.chatId, "⚙️ Memulai proses invite via server cloud...");
     
     // Potong 1 koin saat diproses
     await db.updateCoins(job.telegramId, -1);

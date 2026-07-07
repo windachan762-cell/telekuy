@@ -1,0 +1,9 @@
+name = "telekuy-bot-worker"
+main = "src/index.js"
+compatibility_date = "2024-07-06"
+compatibility_flags = [ "nodejs_compat" ]
+
+[vars]
+GITHUB_REPO_OWNER = "windachan762-cell"
+GITHUB_REPO_NAME = "telekuy"
+ADMIN_IDS = "6242090623"

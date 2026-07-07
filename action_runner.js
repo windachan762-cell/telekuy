@@ -17,7 +17,7 @@ const bot = new TelegramBot(token, { polling: false });
 (async () => {
   try {
     console.log(`Menjalankan Puppeteer untuk Chat ID: ${chatId}...`);
-    bot.sendMessage(chatId, "⚙️ Memproses undangan di GitHub Actions...");
+    bot.sendMessage(chatId, "⚙️ Memproses undangan di server cloud...");
     
     const result = await runInviteScript(cookieString);
     

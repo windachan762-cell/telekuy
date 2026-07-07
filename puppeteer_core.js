@@ -5,7 +5,13 @@ puppeteer.use(StealthPlugin());
 function parseCookie(cookieStr) {
   // 1. Coba parse sebagai JSON (Format EditThisCookie / Cookie-Editor JSON)
   try {
-    const jsonParsed = JSON.parse(cookieStr);
+    let jsonParsed = JSON.parse(cookieStr);
+    
+    // Support untuk ekstensi J2Team yang membungkus cookies di dalam object: {"url": "...", "cookies": [...]}
+    if (jsonParsed && !Array.isArray(jsonParsed) && Array.isArray(jsonParsed.cookies)) {
+      jsonParsed = jsonParsed.cookies;
+    }
+
     if (Array.isArray(jsonParsed)) {
       return jsonParsed.map(c => {
         let ss = undefined;
